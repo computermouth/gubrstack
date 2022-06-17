@@ -18,7 +18,7 @@ Color block_colors[] = {
 	PINK      ,
 	RED       ,
 	MAROON    ,
-	GREEN     ,
+	LIME      ,
 	DARKGREEN ,
 	SKYBLUE   ,
 	BLUE      ,
@@ -51,8 +51,7 @@ int main(void)
 	camera.fovy = 20.0f;                                // Camera field-of-view Y
 	camera.projection = CAMERA_PERSPECTIVE;             // Camera mode type
 	
-	SetCameraMode(camera, CAMERA_FREE); // Set a free camera mode
-	//~ SetCameraMoveControls(KEY_UP, KEY_DOWN, KEY_RIGHT, KEY_LEFT, KEY_W, KEY_S);
+	SetCameraMode(camera, CAMERA_CUSTOM); // Set a free camera mode
 	
 	const unsigned int colorsize = sizeof(block_colors)/sizeof(block_colors[0]) - 1;
 	
@@ -91,7 +90,7 @@ int main(void)
 	char point_txt[13];
 	sprintf(point_txt, "Points: %d", points);
 
-	SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+	SetTargetFPS(6000);               // Set our game to run at 60 frames-per-second
 	//--------------------------------------------------------------------------------------
 
 	// Main game loop
@@ -109,6 +108,10 @@ int main(void)
 		while(keypress = GetKeyPressed()){
 			if (keypress == KEY_ENTER) {
 				stop = true;
+			} else if (keypress == KEY_W) {
+				camera.position.y += 1.0f;
+			} else if (keypress == KEY_S) {
+				camera.position.y -= 1.0f;
 			}
 		}
 		
@@ -124,8 +127,16 @@ int main(void)
 			camera.target.y += 0.5f;
 			camera.position.y += 0.5f;
 			
-			origin = (origin + 1) % 2;
+			topblock.position.x = 0.0f;
 			topblock.position.y += 0.5f;
+			topblock.position.z = 0.0f;
+			
+			origin = (origin + 1) % 2;
+			if (origin == LEFT)
+				topblock.position.x -= 5.0f;
+			else
+				topblock.position.z -= 5.0f;
+			
 			topblock.color = block_colors[GetRandomValue(0, colorsize)];
 		}
 		
@@ -136,11 +147,14 @@ int main(void)
 		else
 			axis = &topblock.position.z;
 		
-		*axis += direction * 0.05f;
+		// move in respect to frame delta
+		*axis += direction * 0.05f * GetFrameTime() / 0.01667f;
 		
 		// bounce off wall
-		if ( *axis <= -5.0f  || *axis >= 5.0f )
+		if ( *axis < -5.0f  || *axis > 5.0f ){
+			*axis = direction * 5.0f;
 			direction *= -1.0f;
+		}
 
 		// Draw
 		//----------------------------------------------------------------------------------
@@ -160,7 +174,7 @@ int main(void)
 				DrawCube     (topblock.position, topblock.width, topblock.height, topblock.length, topblock.color);
 				DrawCubeWires(topblock.position, topblock.width, topblock.height, topblock.length, LIGHTGRAY     );
 
-				//~ DrawGrid(10, .5f);
+				DrawGrid(10, .5f);
 
 			EndMode3D();
 			
