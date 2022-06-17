@@ -117,9 +117,8 @@ int main(void)
 			points++;
 			sprintf(point_txt, "Points: %d", points);
 			
-			for(int i = 0; i < 5; i++){
-				printf("stack[%d] = stack[%d]\n", i+1, i);
-				stack[i + 1] = stack[i];
+			for(int i = 5; i > 0; i--){
+				stack[i] = stack[i - 1];
 			}
 			stack[0] = topblock;
 			camera.target.y += 0.5f;
