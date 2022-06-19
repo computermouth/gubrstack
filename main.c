@@ -2,6 +2,7 @@
 #include "raylib.h"
 #include <stdio.h>
 #include <time.h>
+#include <math.h>
 
 typedef struct {
 	Vector3 position;
@@ -13,19 +14,15 @@ typedef struct {
 
 Color block_colors[] = {
 	GRAY      ,
-	GOLD      ,
-	ORANGE    ,
-	PINK      ,
+	DARKGRAY  ,
 	RED       ,
 	MAROON    ,
 	LIME      ,
 	DARKGREEN ,
-	SKYBLUE   ,
 	BLUE      ,
-	PURPLE    ,
+	DARKBLUE  ,
 	VIOLET    ,
 	DARKPURPLE,
-	BEIGE     ,
 	BROWN     ,
 	DARKBROWN ,
 };
@@ -45,11 +42,19 @@ int main(void)
 
 	// Define the camera to look into our 3d world
 	Camera3D camera = { 0 };
-	camera.position = (Vector3){ 5.0f, 5.0f, 5.0f };  // Camera position
-	camera.target = (Vector3){ 1.0f, 1.0f, 1.0f };      // Camera looking at point
-	camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };          // Camera up vector (rotation towards target)
+	camera.position = (Vector3){ 6.0f, 6.0f, 6.0f };  // Camera position
+	camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
+	camera.up = (Vector3){ 0.0f,20.0f, 0.0f };          // Camera up vector (rotation towards target)
 	camera.fovy = 20.0f;                                // Camera field-of-view Y
 	camera.projection = CAMERA_PERSPECTIVE;             // Camera mode type
+	
+	float camera_blend_height = camera.position.y;
+	
+	float radius = sqrt(
+		pow(camera.position.x - camera.target.x, 2) +
+		pow(camera.position.z - camera.target.z, 2)
+	);
+	Vector2 angle = { .x  = 45.0f, .y = 45.0f };
 	
 	SetCameraMode(camera, CAMERA_CUSTOM); // Set a free camera mode
 	
@@ -63,8 +68,8 @@ int main(void)
 		.color = block_colors[GetRandomValue(0, colorsize)],
 	};
 	
-	cube_t stack[6];
-	for(int i = 0; i < 6; i++){
+	cube_t stack[10];
+	for(int i = 0; i < 10; i++){
 		stack[i] = (cube_t){ // starting cube
 			.position = (Vector3){0.0f, (float)(i) * -0.5f + -0.25f, 0.0f},
 			.width =     2.0f,
@@ -72,9 +77,9 @@ int main(void)
 			.length =    2.0f,
 			.color =    topblock.color,
 		};
-		stack[i].color.r -= stack[i].color.r / 6 * (i + 1);
-		stack[i].color.g -= stack[i].color.g / 6 * (i + 1);
-		stack[i].color.b -= stack[i].color.b / 6 * (i + 1);
+		stack[i].color.r -= stack[i].color.r / 5 * (i + 1);
+		stack[i].color.g -= stack[i].color.g / 5 * (i + 1);
+		stack[i].color.b -= stack[i].color.b / 5 * (i + 1);
 	}
 	
 	
@@ -88,9 +93,11 @@ int main(void)
 	
 	int  points = 0;
 	char point_txt[13];
+	Color bg = {.r = 60, .g = 120, .b = 180};
+	
 	sprintf(point_txt, "Points: %d", points);
 
-	SetTargetFPS(6000);               // Set our game to run at 60 frames-per-second
+	SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 	//--------------------------------------------------------------------------------------
 
 	// Main game loop
@@ -108,11 +115,32 @@ int main(void)
 		while(keypress = GetKeyPressed()){
 			if (keypress == KEY_ENTER) {
 				stop = true;
-			} else if (keypress == KEY_W) {
-				camera.position.y += 1.0f;
-			} else if (keypress == KEY_S) {
-				camera.position.y -= 1.0f;
 			}
+		}
+		
+		// L camera
+		if (IsKeyDown(KEY_A)){
+			angle.x += 1.0f;
+			if (angle.x >= 360.0f)
+				angle.x -= 360.0f;
+			
+			camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
+			camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
+		}
+		
+		// R camera
+		if (IsKeyDown(KEY_D)){
+			angle.x -= 1.0f;
+			if (angle.x <= 0.0f)
+				angle.x = 360.f - angle.x;
+			
+			camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
+			camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
+		}
+		
+		if(camera.position.y < camera_blend_height){
+			camera.position.y += camera.position.y/camera_blend_height * 0.01f * GetFrameTime() / 0.01667f;
+			camera.target.y   += camera.position.y/camera_blend_height * 0.01f * GetFrameTime() / 0.01667f;
 		}
 		
 		// drop the block, add to stack
@@ -120,12 +148,12 @@ int main(void)
 			points++;
 			sprintf(point_txt, "Points: %d", points);
 			
-			for(int i = 5; i > 0; i--){
+			for(int i = 9; i > 0; i--){
 				stack[i] = stack[i - 1];
 			}
 			stack[0] = topblock;
-			camera.target.y += 0.5f;
-			camera.position.y += 0.5f;
+			
+			camera_blend_height += 0.5f;
 			
 			topblock.position.x = 0.0f;
 			topblock.position.y += 0.5f;
@@ -138,6 +166,19 @@ int main(void)
 				topblock.position.z -= 5.0f;
 			
 			topblock.color = block_colors[GetRandomValue(0, colorsize)];
+			
+			if(points < 125) // they call this the hanging chad
+				if(points % 3 == 0){
+					bg.r--;
+					bg.g--;
+					bg.b--;
+				} else if (points % 2 == 0){
+					bg.g--;
+					bg.b--;
+				} else {
+					bg.b--;
+				}
+			
 		}
 		
 		// move along axis
@@ -160,12 +201,12 @@ int main(void)
 		//----------------------------------------------------------------------------------
 		BeginDrawing();
 
-			ClearBackground(DARKBLUE);
+			ClearBackground(bg);
 
 			BeginMode3D(camera);
 				
 				// stack
-				for(int i = 0; i < 6; i++){
+				for(int i = 0; i < 10; i++){
 					DrawCube     (stack[i].position, stack[i].width, stack[i].height, stack[i].length, stack[i].color);
 					DrawCubeWires(stack[i].position, stack[i].width, stack[i].height, stack[i].length, LIGHTGRAY     );
 				}
