@@ -4,6 +4,7 @@
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
 
 typedef struct {
 	Vector3 position;
@@ -52,7 +53,7 @@ bool check_cube_collision(cube_t top, cube_t last) {
 typedef struct {
 	cube_t  cube;
 	Vector2 vec;
-	int     ttl;
+	float   ttl;
 } ghost_t;
 
 ghost_t * destroying = NULL;
@@ -65,7 +66,7 @@ void draw_destroying(){
 	
 	for(int i = 0; i < des_count; i++){
 		
-		if(destroying[i].ttl <= 0)
+		if(destroying[i].ttl > 3.0f)
 			continue;
 		
 		DrawCube(
@@ -91,73 +92,31 @@ void draw_destroying(){
 		destroying[i].cube.position.x += destroying[i].vec.x * 0.001f * GetFrameTime() / 0.01667f;
 		destroying[i].cube.position.z += destroying[i].vec.y * 0.001f * GetFrameTime() / 0.01667f;
 		
-		destroying[i].ttl -= 1 * (int)(GetFrameTime() / 0.0166f);
-		destroying[i].cube.color.a = destroying[i].ttl / 5;
-		
-		printf("%d\n", destroying[i].ttl);
+		destroying[i].ttl += GetFrameTime();
+		destroying[i].cube.color.a = (3.0f - destroying[i].ttl) / .05f;
 	}
 	
-	if(destroying[0].ttl < 0) {
+	if(destroying[0].ttl > 3.0f) {
 		des_count--;
-		memmove(destroying, destroying + sizeof(destroying[0]), sizeof(destroying[0]) * (des_count - 1) );
-		//~ destroying = MemRealloc(destroying, sizeof(d) * des_count);
+		
+		if(des_count > 0)
+			memmove(destroying, &destroying[1], sizeof(destroying[0]) * (des_count) );
+		
+		if(des_count == 0){
+			free(destroying);
+			destroying = NULL;
+		} else {
+			destroying = realloc(destroying, sizeof(destroying[0]) * des_count);
+		}
 	}
 	
 }
 
 void push_to_destroying(ghost_t d){
 	des_count++;
-	destroying = MemRealloc(destroying, sizeof(d) * des_count);
+	destroying = realloc(destroying, sizeof(d) * des_count);
 	destroying[des_count - 1] = d;
 }
-
-/*
-cube_t chop_cubes(cube_t top, cube_t last) {
-	
-	Rectangle rtop = {
-		.x      = top.position.x,
-		.y      = top.position.z,
-		.width  = top.width,
-		.height = top.length
-	};
-	
-	Rectangle rlast = {
-		.x      = last.position.x,
-		.y      = last.position.z,
-		.width  = last.width,
-		.height = last.length
-	};
-	
-	Rectangle new     = GetCollisionRec(rtop, rlast);
-	
-	//~ printf("rtop -- x: %f\ty: %f\tw: %f\th: %f\n", rtop.x, rtop.y, rtop.width, rtop.height);
-	//~ printf(" new -- x: %f\ty: %f\tw: %f\th: %f\n", new.x, new.y, new.width, new.height);
-	//~ Rectangle des;
-	//~ if(diffx > 0.05f){
-		//~ des.x     = new.x + new.width;
-		//~ des.y     = new.y;
-		//~ des.width = rtop.width - new.width;
-		//~ des.height = new.height;
-	//~ } else {
-		//~ des.x = new.x;
-		//~ des.y = new.y + new.height;
-		//~ des.width = new.width;
-		//~ des.height = rtop.height - new.height;
-	//~ }
-	
-	//~ cube_t descube = {
-		//~ .position = { des.x, top.position.y, des.y },
-		//~ .width = des.width,
-		//~ .height = 0.5f,
-		//~ .length = des.height,
-		//~ .color = top.color,
-	//~ };
-	
-	//~ push_to_destroying(descube);
-	
-	return newcube;
-}
-*/
 
 cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 	
@@ -205,45 +164,16 @@ cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 		.color  = curr.color,
 	};
 	
-	//~ curr.position.x = (curr.position.x + newc.position.x)/2;
-	//~ curr.position.z = (curr.position.z + newc.position.z)/2;
-				//~ DrawCubeWires(curr.position, curr.width, curr.height, curr.length, MAGENTA     );
-	
-	Vector2 n_ltmid = { newr.x,                  newr.y + newr.height / 2};
-	Vector2 n_rtmid = { newr.x + newr.width,     newr.y + newr.height / 2};
-	Vector2 n_upmid = { newr.x + newr.width / 2, newr.y };
-	Vector2 n_dnmid = { newr.x + newr.width / 2, newr.y + newr.height};
-	
-	//~ Vector2 n_ltmid = { newr.x, newr.y };
-	//~ Vector2 n_rtmid = { newr.x + newr.width, newr.y };
-	//~ Vector2 n_upmid = { newr.x + newr.width, newr.y };
-	//~ Vector2 n_dnmid = { newr.x, newr.y };
-	
-	DrawCubeWires((Vector3){.x = n_ltmid.x, .y=curr.position.y, .z=n_ltmid.y}, 0.1f, 0.1f, 0.1f, GREEN );
-	DrawCubeWires((Vector3){.x = n_rtmid.x, .y=curr.position.y, .z=n_rtmid.y}, 0.1f, 0.1f, 0.1f, GREEN );
-	DrawCubeWires((Vector3){.x = n_upmid.x, .y=curr.position.y, .z=n_upmid.y}, 0.1f, 0.1f, 0.1f, GREEN );
-	DrawCubeWires((Vector3){.x = n_dnmid.x, .y=curr.position.y, .z=n_dnmid.y}, 0.1f, 0.1f, 0.1f, GREEN );
-	
-	Vector2 c_ltmid = { curr_rect.x,                  curr_rect.y + curr_rect.height / 2};
+	// the next 40 lines could be compacted, but I find this more readable
+	Vector2 c_ltmid = { curr_rect.x,                       curr_rect.y + curr_rect.height / 2};
 	Vector2 c_rtmid = { curr_rect.x + curr_rect.width,     curr_rect.y + curr_rect.height / 2};
 	Vector2 c_upmid = { curr_rect.x + curr_rect.width / 2, curr_rect.y };
 	Vector2 c_dnmid = { curr_rect.x + curr_rect.width / 2, curr_rect.y + curr_rect.height};
-	
-	DrawCubeWires((Vector3){.x = c_ltmid.x, .y=curr.position.y, .z=c_ltmid.y}, 0.1f, 0.1f, 0.1f, RED );
-	DrawCubeWires((Vector3){.x = c_rtmid.x, .y=curr.position.y, .z=c_rtmid.y}, 0.1f, 0.1f, 0.1f, RED );
-	DrawCubeWires((Vector3){.x = c_upmid.x, .y=curr.position.y, .z=c_upmid.y}, 0.1f, 0.1f, 0.1f, RED );
-	DrawCubeWires((Vector3){.x = c_dnmid.x, .y=curr.position.y, .z=c_dnmid.y}, 0.1f, 0.1f, 0.1f, RED );
 	
 	Vector2 b_ltmid = { base_rect.x,                       base_rect.y + base_rect.height / 2};
 	Vector2 b_rtmid = { base_rect.x + base_rect.width,     base_rect.y + base_rect.height / 2};
 	Vector2 b_upmid = { base_rect.x + base_rect.width / 2, base_rect.y };
 	Vector2 b_dnmid = { base_rect.x + base_rect.width / 2, base_rect.y + base_rect.height};
-	
-	DrawCubeWires((Vector3){.x = b_ltmid.x, .y=curr.position.y, .z=b_ltmid.y}, 0.1f, 0.1f, 0.1f, BLUE );
-	DrawCubeWires((Vector3){.x = b_rtmid.x, .y=curr.position.y, .z=b_rtmid.y}, 0.1f, 0.1f, 0.1f, MAGENTA );
-	DrawCubeWires((Vector3){.x = b_upmid.x, .y=curr.position.y, .z=b_upmid.y}, 0.1f, 0.1f, 0.1f, MAGENTA );
-	DrawCubeWires((Vector3){.x = b_dnmid.x, .y=curr.position.y, .z=b_dnmid.y}, 0.1f, 0.1f, 0.1f, MAGENTA );
-	
 	
 	bool ltcol = CheckCollisionPointRec(b_ltmid, curr_rect);
 	bool rtcol = CheckCollisionPointRec(b_rtmid, curr_rect);
@@ -276,9 +206,7 @@ cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 		desr.height = curr.length;
 	}
 	
-	printf("lt: %d rt: %d up: %d dn: %d\n", ltcol, rtcol, upcol, dncol);
-	//~ printf("xp: %f yp: %f\n", xpad, ypad);
-	
+	// vector for the ghost drift
 	// ( .x = 1.0f || -1.0f, .y = 1.0f || -1.0f)
 	Vector2 drift = {(ltcol * -1.0f) + (rtcol * 1.0f), (upcol * -1.0f) + (dncol * 1.0f)};
 	
@@ -297,7 +225,7 @@ cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 			.color.b = RAYWHITE.b,
 			.color.a = 60,
 		},
-		.ttl = 300,
+		.ttl = 0,
 		.vec = drift,
 	};
 	
@@ -306,38 +234,57 @@ cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 	return newc;
 }
 
-int main(void)
-{
+void window_init(){
 	// Initialization
 	//--------------------------------------------------------------------------------------
 	const int screenWidth = 640;
 	const int screenHeight = 480;
-
-	InitWindow(screenWidth, screenHeight, "raylib [core] example - 3d camera mode");
-
+	
+	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+	InitWindow(screenWidth, screenHeight, "gubrstack");
+	
+	// unset exit key
+	SetExitKey(KEY_NULL);
+	
 	SetRandomSeed(time(0));
+}
 
-	// Define the camera to look into our 3d world
-	Camera3D camera = { 0 };
+
+// Define the camera to look into our 3d world
+Camera3D camera;
+float camera_blend_height;
+float radius;
+Vector2 angle;
+unsigned int colorsize;
+cube_t topblock;
+cube_t stack[10];
+direction_t origin;
+float direction;
+int  points;
+char point_txt[13];
+Color bg;
+
+void round_init(){
+	
 	camera.position = (Vector3){ 6.0f, 6.0f, 6.0f };  // Camera position
 	camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
 	camera.up = (Vector3){ 0.0f,1.0f, 0.0f };          // Camera up vector (rotation towards target)
 	camera.fovy = 20.0f;                                // Camera field-of-view Y
 	camera.projection = CAMERA_PERSPECTIVE;             // Camera mode type
 	
-	float camera_blend_height = camera.position.y;
+	camera_blend_height = camera.position.y;
 	
-	float radius = sqrt(
+	radius = sqrt(
 		pow(camera.position.x - camera.target.x, 2) +
 		pow(camera.position.z - camera.target.z, 2)
 	);
-	Vector2 angle = { .x  = 45.0f, .y = 45.0f };
+	angle = (Vector2){ .x  = 45.0f, .y = 45.0f };
 	
 	SetCameraMode(camera, CAMERA_CUSTOM); // Set a free camera mode
 	
-	const unsigned int colorsize = sizeof(block_colors)/sizeof(block_colors[0]) - 1;
+	colorsize = sizeof(block_colors)/sizeof(block_colors[0]) - 1;
 	
-	cube_t topblock = {
+	topblock = (cube_t){
 		.position = { 0.0f, 0.25f, 0.0f },
 		.width = 2.0f,
 		.height = 0.5f,
@@ -345,7 +292,6 @@ int main(void)
 		.color = block_colors[GetRandomValue(0, colorsize)],
 	};
 	
-	cube_t stack[10];
 	for(int i = 0; i < 10; i++){
 		stack[i] = (cube_t){ // starting cube
 			.position = (Vector3){0.0f, (float)(i) * -0.5f + -0.25f, 0.0f},
@@ -364,22 +310,28 @@ int main(void)
 	}
 	
 	
-	direction_t origin = GetRandomValue(LEFT, RIGHT);
-	//~ direction_t origin = RIGHT;
-	float direction = 1.0; // toward bottom
+	origin = GetRandomValue(LEFT, RIGHT);
+	direction = 1.0; // toward bottom
 	
 	if (origin == LEFT)
 		topblock.position.x -= 5.0f;
 	else
 		topblock.position.z -= 5.0f;
 	
-	int  points = 0;
-	char point_txt[13];
-	Color bg = {.r = 60, .g = 120, .b = 180};
+	points = 0;
+	bg = (Color){.r = 60, .g = 120, .b = 180};
 	
 	sprintf(point_txt, "Points: %d", points);
+	
+}
 
-	SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+int main(void)
+{
+	
+	window_init();
+	round_init();
+
+	//~ SetTargetFPS(10);               // Set our game to run at 60 frames-per-second
 	//--------------------------------------------------------------------------------------
 
 	// Main game loop
@@ -508,7 +460,6 @@ int main(void)
 				// topblock
 				DrawCube     (topblock.position, topblock.width, topblock.height, topblock.length, topblock.color);
 				DrawCubeWires(topblock.position, topblock.width, topblock.height, topblock.length, LIGHTGRAY     );
-				DrawCubeWires(topblock.position, 0.5f, topblock.height, 0.5f, MAGENTA     );
 
 				DrawGrid(10, .5f);
 
