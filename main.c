@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
+#include <string.h>
 
 typedef struct {
 	Vector3 position;
@@ -48,22 +49,65 @@ bool check_cube_collision(cube_t top, cube_t last) {
 	return CheckCollisionRecs(rtop, rlast);	
 }
 
-cube_t * destroying = NULL;
+typedef struct {
+	cube_t  cube;
+	Vector2 vec;
+	int     ttl;
+} ghost_t;
+
+ghost_t * destroying = NULL;
 int des_count = 0;
 
 void draw_destroying(){
 	
+	if(des_count == 0)
+		return;
+	
 	for(int i = 0; i < des_count; i++){
-		DrawCube     (destroying[i].position, destroying[i].width, destroying[i].height, destroying[i].length, destroying[i].color);
-		DrawCubeWires(destroying[i].position, destroying[i].width, destroying[i].height, destroying[i].length, LIGHTGRAY     );
+		
+		if(destroying[i].ttl <= 0)
+			continue;
+		
+		DrawCube(
+			destroying[i].cube.position,
+			destroying[i].cube.width,
+			destroying[i].cube.height,
+			destroying[i].cube.length,
+			destroying[i].cube.color
+		);
+		DrawCubeWires(
+			destroying[i].cube.position,
+			destroying[i].cube.width,
+			destroying[i].cube.height,
+			destroying[i].cube.length,
+			(Color){
+				destroying[i].cube.color.r,
+				destroying[i].cube.color.g,
+				destroying[i].cube.color.b,
+				destroying[i].cube.color.a * 4,
+			}
+		);
+		
+		destroying[i].cube.position.x += destroying[i].vec.x * 0.001f * GetFrameTime() / 0.01667f;
+		destroying[i].cube.position.z += destroying[i].vec.y * 0.001f * GetFrameTime() / 0.01667f;
+		
+		destroying[i].ttl -= 1 * (int)(GetFrameTime() / 0.0166f);
+		destroying[i].cube.color.a = destroying[i].ttl / 5;
+		
+		printf("%d\n", destroying[i].ttl);
+	}
+	
+	if(destroying[0].ttl < 0) {
+		des_count--;
+		memmove(destroying, destroying + sizeof(destroying[0]), sizeof(destroying[0]) * (des_count - 1) );
+		//~ destroying = MemRealloc(destroying, sizeof(d) * des_count);
 	}
 	
 }
 
-void push_to_destroying(cube_t d){
+void push_to_destroying(ghost_t d){
 	des_count++;
 	destroying = MemRealloc(destroying, sizeof(d) * des_count);
-	//~ d.color = RAYWHITE;
 	destroying[des_count - 1] = d;
 }
 
@@ -115,7 +159,7 @@ cube_t chop_cubes(cube_t top, cube_t last) {
 }
 */
 
-cube_t chop_cubes(cube_t curr, cube_t base) {
+cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 	
 	Rectangle curr_rect = {
 		.x      = curr.position.x - curr.width  / 2,
@@ -195,7 +239,7 @@ cube_t chop_cubes(cube_t curr, cube_t base) {
 	Vector2 b_upmid = { base_rect.x + base_rect.width / 2, base_rect.y };
 	Vector2 b_dnmid = { base_rect.x + base_rect.width / 2, base_rect.y + base_rect.height};
 	
-	DrawCubeWires((Vector3){.x = b_ltmid.x, .y=curr.position.y, .z=b_ltmid.y}, 0.1f, 0.1f, 0.1f, MAGENTA );
+	DrawCubeWires((Vector3){.x = b_ltmid.x, .y=curr.position.y, .z=b_ltmid.y}, 0.1f, 0.1f, 0.1f, BLUE );
 	DrawCubeWires((Vector3){.x = b_rtmid.x, .y=curr.position.y, .z=b_rtmid.y}, 0.1f, 0.1f, 0.1f, MAGENTA );
 	DrawCubeWires((Vector3){.x = b_upmid.x, .y=curr.position.y, .z=b_upmid.y}, 0.1f, 0.1f, 0.1f, MAGENTA );
 	DrawCubeWires((Vector3){.x = b_dnmid.x, .y=curr.position.y, .z=b_dnmid.y}, 0.1f, 0.1f, 0.1f, MAGENTA );
@@ -206,40 +250,58 @@ cube_t chop_cubes(cube_t curr, cube_t base) {
 	bool upcol = CheckCollisionPointRec(b_upmid, curr_rect);
 	bool dncol = CheckCollisionPointRec(b_dnmid, curr_rect);
 	
-	float xpad = 1.0f;
-	float ypad = 1.0f;
-	if(ltcol)
-		xpad = -1.0f;
-	if(upcol)
-		ypad = -1.0f;
-	
 	Rectangle desr;
-	if(upcol){
+	if(origin == RIGHT && upcol){
 		desr.x = b_upmid.x;
 		desr.y = (b_upmid.y + c_upmid.y) / 2;
 		desr.width = curr.width;
 		desr.height = c_upmid.y - b_upmid.y;
 	}
+	if(origin == RIGHT && dncol){
+		desr.x = b_dnmid.x;
+		desr.y = (b_dnmid.y + c_dnmid.y) / 2;
+		desr.width = curr.width;
+		desr.height = c_dnmid.y - b_dnmid.y;
+	}
+	if(origin == LEFT  && ltcol){
+		desr.x = (b_ltmid.x + c_ltmid.x) / 2;
+		desr.y = c_ltmid.y;
+		desr.width = c_ltmid.x - b_ltmid.x;
+		desr.height = curr.length;
+	}
+	if(origin == LEFT  && rtcol){
+		desr.x = (b_rtmid.x + c_rtmid.x) / 2;
+		desr.y = c_rtmid.y;
+		desr.width = c_rtmid.x - b_rtmid.x;
+		desr.height = curr.length;
+	}
 	
 	printf("lt: %d rt: %d up: %d dn: %d\n", ltcol, rtcol, upcol, dncol);
-	printf("xp: %f yp: %f\n", xpad, ypad);
+	//~ printf("xp: %f yp: %f\n", xpad, ypad);
 	
-	cube_t desc = {
-		.position = {
-			.x = desr.x,
-			.y = curr.position.y,
-			.z = desr.y,
+	// ( .x = 1.0f || -1.0f, .y = 1.0f || -1.0f)
+	Vector2 drift = {(ltcol * -1.0f) + (rtcol * 1.0f), (upcol * -1.0f) + (dncol * 1.0f)};
+	
+	ghost_t g = {
+		.cube = {
+			.position = {
+				.x = desr.x,
+				.y = curr.position.y,
+				.z = desr.y,
+			},
+			.width   = desr.width,
+			.height  = 0.5f,
+			.length  = desr.height,
+			.color.r = RAYWHITE.r,
+			.color.g = RAYWHITE.g,
+			.color.b = RAYWHITE.b,
+			.color.a = 60,
 		},
-		.width  = desr.width,
-		.height = 0.5f,
-		.length = desr.height,
-		.color  = RAYWHITE,
+		.ttl = 300,
+		.vec = drift,
 	};
-	desc.color.a = 64;
 	
-	// TODO -- deleteme
-	//~ if (destroying == NULL)
-		push_to_destroying(desc);
+	push_to_destroying(g);
 	
 	return newc;
 }
@@ -303,6 +365,7 @@ int main(void)
 	
 	
 	direction_t origin = GetRandomValue(LEFT, RIGHT);
+	//~ direction_t origin = RIGHT;
 	float direction = 1.0; // toward bottom
 	
 	if (origin == LEFT)
@@ -367,7 +430,7 @@ int main(void)
 			
 			if (check_cube_collision(topblock, stack[0])){
 				
-				topblock = chop_cubes(topblock, stack[0]);
+				topblock = chop_cubes(topblock, stack[0], origin);
 				
 			} else {
 				// Game Over
