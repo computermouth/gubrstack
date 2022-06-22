@@ -89,8 +89,8 @@ void draw_destroying(){
 			}
 		);
 		
-		destroying[i].cube.position.x += destroying[i].vec.x * 0.001f * GetFrameTime() / 0.01667f;
-		destroying[i].cube.position.z += destroying[i].vec.y * 0.001f * GetFrameTime() / 0.01667f;
+		destroying[i].cube.position.x += destroying[i].vec.x * 0.002f * GetFrameTime() / 0.01667f;
+		destroying[i].cube.position.z += destroying[i].vec.y * 0.002f * GetFrameTime() / 0.01667f;
 		
 		destroying[i].ttl += GetFrameTime();
 		destroying[i].cube.color.a = (3.0f - destroying[i].ttl) / .05f;
@@ -235,8 +235,7 @@ cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 }
 
 void window_init(){
-	// Initialization
-	//--------------------------------------------------------------------------------------
+
 	const int screenWidth = 640;
 	const int screenHeight = 480;
 	
@@ -245,8 +244,9 @@ void window_init(){
 	
 	// unset exit key
 	SetExitKey(KEY_NULL);
-	
+	SetTargetFPS(60);
 	SetRandomSeed(time(0));
+	
 }
 
 
@@ -263,6 +263,8 @@ float direction;
 int  points;
 char point_txt[13];
 Color bg;
+
+#define ORIGIN_OFFSET 3.0f
 
 void round_init(){
 	
@@ -314,14 +316,20 @@ void round_init(){
 	direction = 1.0; // toward bottom
 	
 	if (origin == LEFT)
-		topblock.position.x -= 5.0f;
+		topblock.position.x -= ORIGIN_OFFSET;
 	else
-		topblock.position.z -= 5.0f;
+		topblock.position.z -= ORIGIN_OFFSET;
 	
 	points = 0;
 	bg = (Color){.r = 60, .g = 120, .b = 180};
 	
 	sprintf(point_txt, "Points: %d", points);
+	
+	if(destroying != NULL){
+		free(destroying);
+		destroying = NULL;
+		des_count = 0;
+	}
 	
 }
 
@@ -338,6 +346,7 @@ int main(void)
 	while (!WindowShouldClose())    // Detect window close button or ESC key
 	{
 		
+		render_end:
 		UpdateCamera(&camera);
 		
 		// Update
@@ -386,6 +395,8 @@ int main(void)
 				
 			} else {
 				// Game Over
+				round_init();
+				goto render_end;
 			}
 			
 			points++;
@@ -404,9 +415,9 @@ int main(void)
 			
 			origin = (origin + 1) % 2;
 			if (origin == LEFT)
-				topblock.position.x -= 5.0f;
+				topblock.position.x = -1.0f * ORIGIN_OFFSET;
 			else
-				topblock.position.z -= 5.0f;
+				topblock.position.z = -1.0f * ORIGIN_OFFSET;
 			
 			topblock.color = block_colors[GetRandomValue(0, colorsize)];
 			
@@ -435,8 +446,8 @@ int main(void)
 		*axis += direction * 0.05f * GetFrameTime() / 0.01667f;
 		
 		// bounce off wall
-		if ( *axis < -5.0f  || *axis > 5.0f ){
-			*axis = direction * 5.0f;
+		if ( *axis < (-1.0f * ORIGIN_OFFSET)  || *axis > ORIGIN_OFFSET ){
+			*axis = direction * ORIGIN_OFFSET;
 			direction *= -1.0f;
 		}
 
@@ -461,8 +472,21 @@ int main(void)
 				DrawCube     (topblock.position, topblock.width, topblock.height, topblock.length, topblock.color);
 				DrawCubeWires(topblock.position, topblock.width, topblock.height, topblock.length, LIGHTGRAY     );
 
-				DrawGrid(10, .5f);
-
+				//~ DrawGrid(10, .5f);
+				//~ cube_t grid[10][10];
+				//~ for(int i = 0; i < 10; i++)
+					//~ for(int j = 0; j < 10; j++){
+							//~ grid[i][j] = (cube_t){ // starting cube
+								//~ .position = (Vector3){i * 0.5f - 2.5f, 0.0f, j * 0.5f - 2.5f},
+								//~ .width =     0.5f,
+								//~ .height =    0.0f,
+								//~ .length =    0.5f,
+								//~ .color =     LIGHTGRAY,
+							//~ };
+							//~ DrawCube(grid[i][j].position, grid[i][j].width, grid[i][j].height, grid[i][j].length, grid[i][j].color);
+						//~ }
+				
+				
 			EndMode3D();
 			
 			DrawText(point_txt, 10, 40, 20, LIGHTGRAY);
@@ -471,6 +495,7 @@ int main(void)
 
 		EndDrawing();
 		//----------------------------------------------------------------------------------
+		
 	}
 
 	// De-Initialization
