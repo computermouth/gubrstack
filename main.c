@@ -6,13 +6,28 @@
 #include <string.h>
 #include <stdlib.h>
 
+
+#define ORIGIN_OFFSET     3.0f
+#define STACKLEN            10
+#define CAMERA_START_POS  6.0f
+#define CAMERA_TARGET_POS 0.0f
+
 typedef struct {
 	Vector3 position;
 	float   width;
 	float   height;
 	float   length;
-	Color   color;
+	Color   c_color;
+	Color   l_color;
 } cube_t;
+
+typedef struct {
+	cube_t  cube;
+	Vector2 vec;
+	float   ttl;
+} ghost_t;
+
+typedef enum { LEFT, RIGHT } direction_t;
 
 Color block_colors[] = {
 	GRAY      ,
@@ -29,7 +44,8 @@ Color block_colors[] = {
 	DARKBROWN ,
 };
 
-typedef enum { LEFT, RIGHT } direction_t;
+ghost_t * destroying = NULL;
+int des_count = 0;
 
 bool check_cube_collision(cube_t top, cube_t last) {
 	
@@ -50,15 +66,6 @@ bool check_cube_collision(cube_t top, cube_t last) {
 	return CheckCollisionRecs(rtop, rlast);	
 }
 
-typedef struct {
-	cube_t  cube;
-	Vector2 vec;
-	float   ttl;
-} ghost_t;
-
-ghost_t * destroying = NULL;
-int des_count = 0;
-
 void draw_destroying(){
 	
 	if(des_count == 0)
@@ -74,26 +81,22 @@ void draw_destroying(){
 			destroying[i].cube.width,
 			destroying[i].cube.height,
 			destroying[i].cube.length,
-			destroying[i].cube.color
+			destroying[i].cube.c_color
 		);
 		DrawCubeWires(
 			destroying[i].cube.position,
 			destroying[i].cube.width,
 			destroying[i].cube.height,
 			destroying[i].cube.length,
-			(Color){
-				destroying[i].cube.color.r,
-				destroying[i].cube.color.g,
-				destroying[i].cube.color.b,
-				destroying[i].cube.color.a * 4,
-			}
+			destroying[i].cube.l_color
 		);
 		
 		destroying[i].cube.position.x += destroying[i].vec.x * 0.002f * GetFrameTime() / 0.01667f;
 		destroying[i].cube.position.z += destroying[i].vec.y * 0.002f * GetFrameTime() / 0.01667f;
 		
 		destroying[i].ttl += GetFrameTime();
-		destroying[i].cube.color.a = (3.0f - destroying[i].ttl) / .05f;
+		destroying[i].cube.c_color.a = (3.0f - destroying[i].ttl) / .05f;
+		destroying[i].cube.l_color.a = destroying[i].cube.c_color.a * 4;
 	}
 	
 	if(destroying[0].ttl > 3.0f) {
@@ -161,7 +164,8 @@ cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 		.width  = newr.width,
 		.height = 0.5f,
 		.length = newr.height,
-		.color  = curr.color,
+		.c_color  = curr.c_color,
+		.l_color  = curr.l_color,
 	};
 	
 	// the next 40 lines could be compacted, but I find this more readable
@@ -220,10 +224,11 @@ cube_t chop_cubes(cube_t curr, cube_t base, direction_t origin) {
 			.width   = desr.width,
 			.height  = 0.5f,
 			.length  = desr.height,
-			.color.r = RAYWHITE.r,
-			.color.g = RAYWHITE.g,
-			.color.b = RAYWHITE.b,
-			.color.a = 60,
+			.c_color.r = RAYWHITE.r,
+			.c_color.g = RAYWHITE.g,
+			.c_color.b = RAYWHITE.b,
+			.c_color.a = 60,
+			.l_color   = LIGHTGRAY
 		},
 		.ttl = 0,
 		.vec = drift,
@@ -257,19 +262,67 @@ float radius;
 Vector2 angle;
 unsigned int colorsize;
 cube_t topblock;
-cube_t stack[10];
+cube_t stack[STACKLEN];
 direction_t origin;
 float direction;
 int  points;
 char point_txt[13];
 Color bg;
 
-#define ORIGIN_OFFSET 3.0f
+Image bg_img;
+Texture2D bg_tex;
+Vector3 bg_pos;
+float bg_size;
+
+void new_stack(){
+	
+	topblock = (cube_t){
+		.position = { 0.0f, 0.25f, 0.0f },
+		.width = 2.0f,
+		.height = 0.5f,
+		.length = 2.0f,
+		.c_color = block_colors[GetRandomValue(0, colorsize)],
+		.l_color = LIGHTGRAY,
+	};
+	
+	for(int i = 0; i < STACKLEN; i++){
+		stack[i] = (cube_t){ // starting cube
+			.position = (Vector3){0.0f, (float)(i) * -0.5f + -0.25f, 0.0f},
+			.width =     2.0f,
+			.height =    0.5f,
+			.length =    2.0f,
+			.c_color =   topblock.c_color,
+			.l_color =   topblock.l_color,
+		};
+		if(i > 4)
+			stack[i].c_color = BLACK;
+		else {
+			stack[i].c_color.r -= stack[i].c_color.r / 5 * (i + 1);
+			stack[i].c_color.g -= stack[i].c_color.g / 5 * (i + 1);
+			stack[i].c_color.b -= stack[i].c_color.b / 5 * (i + 1);
+		}
+	}
+	
+}
 
 void round_init(){
 	
-	camera.position = (Vector3){ 6.0f, 6.0f, 6.0f };  // Camera position
-	camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
+	// TODO -- tie to resolution
+	bg_img = GenImageGradientV(640, 480, WHITE, BLACK);
+	bg_tex = LoadTextureFromImage(bg_img);
+	bg_pos = (Vector3){ -6.0f, -6.0f, -6.0f };
+	bg_size = 15.0f;
+	
+	camera.position = (Vector3){
+		CAMERA_START_POS, 
+		CAMERA_START_POS,
+		CAMERA_START_POS
+	};  // Camera position
+	camera.target = (Vector3){
+		CAMERA_TARGET_POS,
+		CAMERA_TARGET_POS,
+		CAMERA_TARGET_POS
+	};  // Camera looking at point
 	camera.up = (Vector3){ 0.0f,1.0f, 0.0f };          // Camera up vector (rotation towards target)
 	camera.fovy = 20.0f;                                // Camera field-of-view Y
 	camera.projection = CAMERA_PERSPECTIVE;             // Camera mode type
@@ -286,31 +339,7 @@ void round_init(){
 	
 	colorsize = sizeof(block_colors)/sizeof(block_colors[0]) - 1;
 	
-	topblock = (cube_t){
-		.position = { 0.0f, 0.25f, 0.0f },
-		.width = 2.0f,
-		.height = 0.5f,
-		.length = 2.0f,
-		.color = block_colors[GetRandomValue(0, colorsize)],
-	};
-	
-	for(int i = 0; i < 10; i++){
-		stack[i] = (cube_t){ // starting cube
-			.position = (Vector3){0.0f, (float)(i) * -0.5f + -0.25f, 0.0f},
-			.width =     2.0f,
-			.height =    0.5f,
-			.length =    2.0f,
-			.color =    topblock.color,
-		};
-		if(i > 4)
-			stack[i].color = BLACK;
-		else {
-			stack[i].color.r -= stack[i].color.r / 5 * (i + 1);
-			stack[i].color.g -= stack[i].color.g / 5 * (i + 1);
-			stack[i].color.b -= stack[i].color.b / 5 * (i + 1);
-		}
-	}
-	
+	new_stack();
 	
 	origin = GetRandomValue(LEFT, RIGHT);
 	direction = 1.0; // toward bottom
@@ -325,176 +354,343 @@ void round_init(){
 	
 	sprintf(point_txt, "Points: %d", points);
 	
-	if(destroying != NULL){
+	free(destroying);
+	destroying = NULL;
+	des_count = 0;
+	
+}
+
+typedef enum { CLEAR, SCROLL } update_state_t;
+update_state_t us = CLEAR;
+float clearttl = 2.55f;
+
+bool update_reset(){
+	
+	// clearing
+	if (us == CLEAR && stack[0].c_color.a != 0){
+		clearttl -= GetFrameTime() * 3;
+		int reduceto  = (int)((clearttl) * 100.0f);
+		if(reduceto < 1)
+			reduceto = 0;
+		
+		for(int i = 0; i < STACKLEN; i++){
+			stack[i].c_color.a = reduceto;
+			stack[i].l_color.a = reduceto;
+		}
+		
+		return false;
+	} else if ( us == CLEAR && stack[0].c_color.a == 0){
+		// twice as high as start
+		camera.position.x = CAMERA_START_POS;
+		camera.position.y = CAMERA_START_POS + CAMERA_START_POS;
+		camera.position.z = CAMERA_START_POS;
+		camera.target.x   =                    CAMERA_TARGET_POS;
+		camera.target.y   = CAMERA_START_POS + CAMERA_TARGET_POS;
+		camera.target.z   =                    CAMERA_TARGET_POS;
+		bg_pos.x          = -1.0f * CAMERA_START_POS;
+		bg_pos.y          = camera.position.y -  2 * CAMERA_START_POS;
+		bg_pos.z          = -1.0f * CAMERA_START_POS;
+		new_stack();
 		free(destroying);
 		destroying = NULL;
 		des_count = 0;
+		clearttl = 2.55f;
+		us = SCROLL;
 	}
 	
+	if (us == SCROLL && camera.position.y > CAMERA_START_POS){
+		camera.position.y -= GetFrameTime() / 0.1667f;
+		camera.target.y   -= GetFrameTime() / 0.1667f;
+		bg_pos.y          -= GetFrameTime() / 0.1667f;
+		
+		if (points > 0)
+			points *= (camera.position.y - CAMERA_START_POS + .01f) / CAMERA_START_POS;
+		sprintf(point_txt, "Points: %d", points);
+	} else if (us == SCROLL && camera.position.y <= CAMERA_START_POS ){
+		points = 0;
+		camera.position.y = CAMERA_START_POS;
+		camera.target.y   = CAMERA_TARGET_POS;
+		bg_pos.y  = -1.0f * CAMERA_START_POS;
+		camera_blend_height = camera.position.y;
+		return true;
+	}
+	
+	
+	
+	//~ if (stack[0].color.a == 0) {
+		//~ points = 0;
+		//~ return true;
+	//~ }
+	
+	return false;
 }
+
+void render_reset(){
+	BeginDrawing();
+
+		ClearBackground(bg);
+		
+		BeginMode3D(camera);
+		
+		DrawBillboard(
+			camera,
+			bg_tex,
+			bg_pos,
+			bg_size,
+			WHITE
+		);
+
+		draw_stack();
+		draw_destroying();
+		draw_topblock();
+		
+		//~ DrawGrid(10, 0.5f);
+		
+		EndMode3D();
+		
+		DrawText(point_txt, 10, 40, 20, BLACK);
+		DrawFPS(10, 10);
+
+	EndDrawing();
+}
+
+bool update_play(){
+	// read stop input before here
+	int keypress = -1;
+	bool stop = false;
+	while((keypress = GetKeyPressed())){
+		if (keypress == KEY_ENTER) {
+			stop = true;
+		}
+	}
+	
+	// L camera
+	if (IsKeyDown(KEY_A)){
+		angle.x += 1.0f * (GetFrameTime() / 0.01667f);
+		if (angle.x >= 360.0f)
+			angle.x -= 360.0f;
+		
+		camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
+		camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
+	}
+	
+	// R camera
+	if (IsKeyDown(KEY_D)){
+		angle.x -= 1.0f * (GetFrameTime() / 0.01667f);
+		if (angle.x <= 0.0f)
+			angle.x = 360.f - angle.x;
+		
+		camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
+		camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
+	}
+	
+	if(camera.position.y < camera_blend_height){
+		camera.position.y += 0.01f * GetFrameTime() / 0.01667f;
+		camera.target.y   += 0.01f * GetFrameTime() / 0.01667f;
+		bg_pos.y          += 0.01f * GetFrameTime() / 0.01667f;
+	}
+	
+	// drop the block, add to stack
+	if (stop) {
+		
+		if (check_cube_collision(topblock, stack[0])){
+			
+			topblock = chop_cubes(topblock, stack[0], origin);
+			
+		} else {			
+			
+			topblock.c_color = RAYWHITE;
+			topblock.c_color.a = 0;
+			topblock.l_color.a = 0;
+			push_to_destroying((ghost_t){.cube = topblock, .ttl = 0, .vec = (Vector2){0, 0}});
+			
+			
+			// Game Over
+			//~ round_init();
+			return true;
+		}
+		
+		points++;
+		sprintf(point_txt, "Points: %d", points);
+		
+		for(int i = 9; i > 0; i--){
+			stack[i] = stack[i - 1];
+		}
+		stack[0] = topblock;
+		
+		camera_blend_height += 0.5f;
+		
+		topblock.position.y += 0.5f;
+		
+		origin = (origin + 1) % 2;
+		if (origin == LEFT)
+			topblock.position.x = -1.0f * ORIGIN_OFFSET;
+		else
+			topblock.position.z = -1.0f * ORIGIN_OFFSET;
+		
+		topblock.c_color = block_colors[GetRandomValue(0, colorsize)];
+		
+		if(points < 125){
+			if(points % 3 == 0){
+				bg.r--;
+				bg.g--;
+				bg.b--;
+			} else if (points % 2 == 0){
+				bg.g--;
+				bg.b--;
+			} else {
+				bg.b--;
+			}
+		}
+	}
+	
+	// move along axis
+	float * axis;
+	if (origin == LEFT)
+		axis = &topblock.position.x;
+	else
+		axis = &topblock.position.z;
+	
+	// move in respect to frame delta
+	*axis += direction * 0.05f * GetFrameTime() / 0.01667f;
+	
+	// bounce off wall
+	if ( *axis < (-1.0f * ORIGIN_OFFSET)  || *axis > ORIGIN_OFFSET ){
+		*axis = direction * ORIGIN_OFFSET;
+		direction *= -1.0f;
+	}
+	
+	return false;
+}
+
+void draw_stack(){
+	// stack
+	for(int i = 0; i < 10; i++){
+		DrawCube     (stack[i].position, stack[i].width, stack[i].height, stack[i].length, stack[i].c_color);
+		DrawCubeWires(stack[i].position, stack[i].width, stack[i].height, stack[i].length, stack[i].l_color);
+	}
+}
+
+void draw_topblock(){
+	// topblock
+	DrawCube     (topblock.position, topblock.width, topblock.height, topblock.length, topblock.c_color);
+	DrawCubeWires(topblock.position, topblock.width, topblock.height, topblock.length, topblock.l_color);
+}
+
+void render_play(){
+	BeginDrawing();
+
+		ClearBackground(bg);
+		
+		BeginMode3D(camera);
+		
+		DrawBillboard(
+			camera,
+			bg_tex,
+			bg_pos,
+			bg_size,
+			WHITE
+		);
+
+		draw_stack();
+		draw_destroying();
+		draw_topblock();
+		
+		//~ DrawGrid(10, 0.5f);
+		
+		EndMode3D();
+		
+		DrawText(point_txt, 10, 40, 20, BLACK);
+		DrawFPS(10, 10);
+
+	EndDrawing();
+}
+
+bool update_over(){
+	
+	int keypress = -1;
+	while((keypress = GetKeyPressed())){
+		if (keypress == KEY_ENTER) {
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+void render_over(){
+	BeginDrawing();
+
+		ClearBackground(bg);
+		
+		BeginMode3D(camera);
+		
+		DrawBillboard(
+			camera,
+			bg_tex,
+			bg_pos,
+			bg_size,
+			WHITE
+		);
+
+		draw_stack();
+		draw_destroying();
+		draw_topblock();
+		
+		//~ DrawGrid(10, 0.5f);
+		
+		EndMode3D();
+		
+		// TODO -- clean up
+		DrawText("GAME OVER", 100, 100, 40, BLACK);
+		DrawText(point_txt, 10, 40, 20, BLACK);
+		DrawFPS(10, 10);
+
+	EndDrawing();
+}
+
+typedef enum { MENU, PLAY, OVER, RESET, QUIT } state_t;
+
+state_t state = PLAY;
 
 int main(void)
 {
 	
+	// run once init
 	window_init();
 	round_init();
-
-	//~ SetTargetFPS(10);               // Set our game to run at 60 frames-per-second
-	//--------------------------------------------------------------------------------------
-
-	// Main game loop
-	while (!WindowShouldClose())    // Detect window close button or ESC key
+	
+	// main loop
+	while (!WindowShouldClose() && state != QUIT) // desktop [X]
 	{
 		
-		render_end:
 		UpdateCamera(&camera);
 		
-		// Update
+		// update
 		//----------------------------------------------------------------------------------
 		
-		// read stop input before here
-		int keypress = -1;
-		bool stop = false;
-		while((keypress = GetKeyPressed())){
-			if (keypress == KEY_ENTER) {
-				stop = true;
-			}
-		}
-		
-		// L camera
-		if (IsKeyDown(KEY_A)){
-			angle.x += 1.0f;
-			if (angle.x >= 360.0f)
-				angle.x -= 360.0f;
-			
-			camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
-			camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
-		}
-		
-		// R camera
-		if (IsKeyDown(KEY_D)){
-			angle.x -= 1.0f;
-			if (angle.x <= 0.0f)
-				angle.x = 360.f - angle.x;
-			
-			camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
-			camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
-		}
-		
-		if(camera.position.y < camera_blend_height){
-			camera.position.y += 0.01f * GetFrameTime() / 0.01667f;
-			camera.target.y   += 0.01f * GetFrameTime() / 0.01667f;
-		}
-		
-		// drop the block, add to stack
-		if (stop) {
-			
-			if (check_cube_collision(topblock, stack[0])){
-				
-				topblock = chop_cubes(topblock, stack[0], origin);
-				
-			} else {
-				// Game Over
-				round_init();
-				goto render_end;
-			}
-			
-			points++;
-			sprintf(point_txt, "Points: %d", points);
-			
-			for(int i = 9; i > 0; i--){
-				stack[i] = stack[i - 1];
-			}
-			stack[0] = topblock;
-			
-			camera_blend_height += 0.5f;
-			
-			//~ topblock.position.x = 0.0f;
-			topblock.position.y += 0.5f;
-			//~ topblock.position.z = 0.0f;
-			
-			origin = (origin + 1) % 2;
-			if (origin == LEFT)
-				topblock.position.x = -1.0f * ORIGIN_OFFSET;
-			else
-				topblock.position.z = -1.0f * ORIGIN_OFFSET;
-			
-			topblock.color = block_colors[GetRandomValue(0, colorsize)];
-			
-			if(points < 125){
-				if(points % 3 == 0){
-					bg.r--;
-					bg.g--;
-					bg.b--;
-				} else if (points % 2 == 0){
-					bg.g--;
-					bg.b--;
-				} else {
-					bg.b--;
-				}
-			}
-		}
-		
-		// move along axis
-		float * axis;
-		if (origin == LEFT)
-			axis = &topblock.position.x;
-		else
-			axis = &topblock.position.z;
-		
-		// move in respect to frame delta
-		*axis += direction * 0.05f * GetFrameTime() / 0.01667f;
-		
-		// bounce off wall
-		if ( *axis < (-1.0f * ORIGIN_OFFSET)  || *axis > ORIGIN_OFFSET ){
-			*axis = direction * ORIGIN_OFFSET;
-			direction *= -1.0f;
+		//~ if (state == MENU && update_menu())
+			//~ state = PLAY;
+		if (state == PLAY && update_play()){
+			state = OVER;
+		} else if (state == OVER && update_over()){
+			us = CLEAR;
+			state = RESET;
+		} else if (state == RESET && update_reset()){
+			printf("menu->play\n");
+			state = MENU;
+			state = PLAY;
 		}
 
-		// Draw
+		// render
 		//----------------------------------------------------------------------------------
-		BeginDrawing();
-
-			ClearBackground(bg);
-
-			BeginMode3D(camera);
-				
-				// stack
-				for(int i = 0; i < 10; i++){
-					DrawCube     (stack[i].position, stack[i].width, stack[i].height, stack[i].length, stack[i].color);
-					DrawCubeWires(stack[i].position, stack[i].width, stack[i].height, stack[i].length, LIGHTGRAY     );
-				}
-				
-				// destroying
-				draw_destroying();
-				
-				// topblock
-				DrawCube     (topblock.position, topblock.width, topblock.height, topblock.length, topblock.color);
-				DrawCubeWires(topblock.position, topblock.width, topblock.height, topblock.length, LIGHTGRAY     );
-
-				//~ DrawGrid(10, .5f);
-				//~ cube_t grid[10][10];
-				//~ for(int i = 0; i < 10; i++)
-					//~ for(int j = 0; j < 10; j++){
-							//~ grid[i][j] = (cube_t){ // starting cube
-								//~ .position = (Vector3){i * 0.5f - 2.5f, 0.0f, j * 0.5f - 2.5f},
-								//~ .width =     0.5f,
-								//~ .height =    0.0f,
-								//~ .length =    0.5f,
-								//~ .color =     LIGHTGRAY,
-							//~ };
-							//~ DrawCube(grid[i][j].position, grid[i][j].width, grid[i][j].height, grid[i][j].length, grid[i][j].color);
-						//~ }
-				
-				
-			EndMode3D();
 			
-			DrawText(point_txt, 10, 40, 20, LIGHTGRAY);
-
-			DrawFPS(10, 10);
-
-		EndDrawing();
-		//----------------------------------------------------------------------------------
+		if (state == PLAY)
+			render_play();
+		if (state == OVER)
+			render_over();
+		if (state == RESET)
+			render_reset();
 		
 	}
 
