@@ -284,6 +284,12 @@ void new_stack(){
 		.c_color = block_colors[GetRandomValue(0, colorsize)],
 		.l_color = LIGHTGRAY,
 	};
+
+	origin = (origin + 1) % 2;
+	if (origin == LEFT)
+		topblock.position.x = -1.0f * ORIGIN_OFFSET;
+	else
+		topblock.position.z = -1.0f * ORIGIN_OFFSET;
 	
 	for(int i = 0; i < STACKLEN; i++){
 		stack[i] = (cube_t){ // starting cube
@@ -339,15 +345,10 @@ void round_init(){
 	
 	colorsize = sizeof(block_colors)/sizeof(block_colors[0]) - 1;
 	
-	new_stack();
-	
 	origin = GetRandomValue(LEFT, RIGHT);
 	direction = 1.0; // toward bottom
 	
-	if (origin == LEFT)
-		topblock.position.x -= ORIGIN_OFFSET;
-	else
-		topblock.position.z -= ORIGIN_OFFSET;
+	new_stack();
 	
 	points = 0;
 	bg = (Color){.r = 60, .g = 120, .b = 180};
@@ -391,6 +392,8 @@ bool update_reset(){
 		bg_pos.y          = camera.position.y -  2 * CAMERA_START_POS;
 		bg_pos.z          = -1.0f * CAMERA_START_POS;
 		new_stack();
+		topblock.c_color.a = 0;
+		topblock.l_color.a = 0;
 		free(destroying);
 		destroying = NULL;
 		des_count = 0;
@@ -412,6 +415,8 @@ bool update_reset(){
 		camera.target.y   = CAMERA_TARGET_POS;
 		bg_pos.y  = -1.0f * CAMERA_START_POS;
 		camera_blend_height = camera.position.y;
+		topblock.c_color.a = 255;
+		topblock.l_color.a = 255;
 		return true;
 	}
 	
@@ -522,6 +527,7 @@ bool update_play(){
 		
 		topblock.position.y += 0.5f;
 		
+		// TODO -- as function
 		origin = (origin + 1) % 2;
 		if (origin == LEFT)
 			topblock.position.x = -1.0f * ORIGIN_OFFSET;
