@@ -245,7 +245,7 @@ void window_init(){
 	const int screenHeight = 480;
 	
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-	InitWindow(screenWidth, screenHeight, "gubrstack");
+	InitWindow(screenWidth, screenHeight, "STAX");
 	
 	// unset exit key
 	SetExitKey(KEY_NULL);
@@ -317,7 +317,7 @@ void round_init(){
 	bg_img = GenImageGradientV(640, 480, WHITE, BLACK);
 	bg_tex = LoadTextureFromImage(bg_img);
 	bg_pos = (Vector3){ -6.0f, -6.0f, -6.0f };
-	bg_size = 15.0f;
+	bg_size = 16.0f;
 	
 	camera.position = (Vector3){
 		CAMERA_START_POS, 
@@ -361,14 +361,14 @@ void round_init(){
 	
 }
 
-typedef enum { CLEAR, SCROLL } update_state_t;
-update_state_t us = CLEAR;
+typedef enum { CLEAR, SCROLL } reset_state_t;
+reset_state_t reset_s = CLEAR;
 float clearttl = 2.55f;
 
 bool update_reset(){
 	
 	// clearing
-	if (us == CLEAR && stack[0].c_color.a != 0){
+	if (reset_s == CLEAR && stack[0].c_color.a != 0){
 		clearttl -= GetFrameTime() * 3;
 		int reduceto  = (int)((clearttl) * 100.0f);
 		if(reduceto < 1)
@@ -380,7 +380,7 @@ bool update_reset(){
 		}
 		
 		return false;
-	} else if ( us == CLEAR && stack[0].c_color.a == 0){
+	} else if ( reset_s == CLEAR && stack[0].c_color.a == 0){
 		// twice as high as start
 		camera.position.x = CAMERA_START_POS;
 		camera.position.y = CAMERA_START_POS + CAMERA_START_POS;
@@ -398,10 +398,10 @@ bool update_reset(){
 		destroying = NULL;
 		des_count = 0;
 		clearttl = 2.55f;
-		us = SCROLL;
+		reset_s = SCROLL;
 	}
 	
-	if (us == SCROLL && camera.position.y > CAMERA_START_POS){
+	if (reset_s == SCROLL && camera.position.y > CAMERA_START_POS){
 		camera.position.y -= GetFrameTime() / 0.1667f;
 		camera.target.y   -= GetFrameTime() / 0.1667f;
 		bg_pos.y          -= GetFrameTime() / 0.1667f;
@@ -409,7 +409,7 @@ bool update_reset(){
 		if (points > 0)
 			points *= (camera.position.y - CAMERA_START_POS + .01f) / CAMERA_START_POS;
 		sprintf(point_txt, "Points: %d", points);
-	} else if (us == SCROLL && camera.position.y <= CAMERA_START_POS ){
+	} else if (reset_s == SCROLL && camera.position.y <= CAMERA_START_POS ){
 		points = 0;
 		camera.position.y = CAMERA_START_POS;
 		camera.target.y   = CAMERA_TARGET_POS;
@@ -419,13 +419,6 @@ bool update_reset(){
 		topblock.l_color.a = 255;
 		return true;
 	}
-	
-	
-	
-	//~ if (stack[0].color.a == 0) {
-		//~ points = 0;
-		//~ return true;
-	//~ }
 	
 	return false;
 }
@@ -470,7 +463,7 @@ bool update_play(){
 	}
 	
 	// L camera
-	if (IsKeyDown(KEY_A)){
+	if (IsKeyDown(KEY_LEFT)){
 		angle.x += 1.0f * (GetFrameTime() / 0.01667f);
 		if (angle.x >= 360.0f)
 			angle.x -= 360.0f;
@@ -480,7 +473,7 @@ bool update_play(){
 	}
 	
 	// R camera
-	if (IsKeyDown(KEY_D)){
+	if (IsKeyDown(KEY_RIGHT)){
 		angle.x -= 1.0f * (GetFrameTime() / 0.01667f);
 		if (angle.x <= 0.0f)
 			angle.x = 360.f - angle.x;
@@ -656,8 +649,88 @@ void render_over(){
 }
 
 typedef enum { MENU, PLAY, OVER, RESET, QUIT } state_t;
+state_t state = MENU;
 
-state_t state = PLAY;
+// TODO -- clean up
+int staxy = 100;
+int _txty = 120;
+int playy = 200;
+int optiy = 300;
+int exity = 400;
+int alltx = 100;
+int marky = 200;
+
+typedef enum { START, OPTIONS, EXIT, MOD_END } menu_state_t;
+menu_state_t menu_s = START;
+
+state_t update_menu(){
+	
+	int keypress = -1;
+	bool stop = false;
+	while((keypress = GetKeyPressed())){
+		if (keypress == KEY_DOWN) {
+			menu_s++;
+			menu_s %= MOD_END;
+		}
+		if (keypress == KEY_UP) {
+			if(menu_s == START)
+				menu_s = MOD_END;
+			menu_s--;
+		}
+		if (keypress == KEY_ENTER) {
+			if (menu_s == START)
+				return PLAY;
+			if (menu_s == OPTIONS)
+				printf("options!\n");
+			if (menu_s == EXIT)
+				return QUIT;
+		}
+	}
+		
+	if (menu_s == START)
+		marky = playy;
+	if (menu_s == OPTIONS)
+		marky = optiy;
+	if (menu_s == EXIT)
+		marky = exity;
+	
+	return MENU;
+}
+
+void render_menu(){
+	BeginDrawing();
+
+		ClearBackground(bg);
+		
+		BeginMode3D(camera);
+		
+		DrawBillboard(
+			camera,
+			bg_tex,
+			bg_pos,
+			bg_size,
+			WHITE
+		);
+
+		draw_stack();
+		//~ draw_destroying();
+		//~ draw_topblock();
+		
+		//~ DrawGrid(10, 0.5f);
+		
+		EndMode3D();
+		
+		DrawText("STAX",    alltx, staxy, 40, RAYWHITE);
+		DrawText("_____",   alltx, _txty, 40, RAYWHITE);
+		DrawText("Play",    alltx, playy, 40, RAYWHITE);
+		DrawText("Options", alltx, optiy, 40, RAYWHITE);
+		DrawText("Exit",    alltx, exity, 40, RAYWHITE);
+		DrawText(">", -40 + alltx, marky, 40, RAYWHITE);
+		
+		DrawFPS(10, 10);
+
+	EndDrawing();
+}
 
 int main(void)
 {
@@ -675,22 +748,22 @@ int main(void)
 		// update
 		//----------------------------------------------------------------------------------
 		
-		//~ if (state == MENU && update_menu())
-			//~ state = PLAY;
+		if (state == MENU)
+			state = update_menu();
 		if (state == PLAY && update_play()){
 			state = OVER;
 		} else if (state == OVER && update_over()){
-			us = CLEAR;
+			reset_s = CLEAR;
 			state = RESET;
 		} else if (state == RESET && update_reset()){
-			printf("menu->play\n");
 			state = MENU;
-			state = PLAY;
 		}
 
 		// render
 		//----------------------------------------------------------------------------------
 			
+		if (state == MENU)
+			render_menu();
 		if (state == PLAY)
 			render_play();
 		if (state == OVER)
