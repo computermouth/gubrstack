@@ -258,8 +258,8 @@ void window_init(){
 // Define the camera to look into our 3d world
 Camera3D camera;
 float camera_blend_height;
-float radius;
-Vector2 angle;
+float cam_radius;
+Vector2 cam_angle;
 unsigned int colorsize;
 cube_t topblock;
 cube_t stack[STACKLEN];
@@ -267,12 +267,20 @@ direction_t origin;
 float direction;
 int  points;
 char point_txt[13];
+
 Color bg;
 
+float bg_radius;
+Vector2 bg_angle;
 Image bg_img;
 Texture2D bg_tex;
 Vector3 bg_pos;
 float bg_size;
+
+Model m;
+Image m_img;
+Texture m_tex;
+Vector3 m_pos;
 
 void new_stack(){
 	
@@ -313,12 +321,6 @@ void new_stack(){
 
 void round_init(){
 	
-	// TODO -- tie to resolution
-	bg_img = GenImageGradientV(640, 480, WHITE, BLACK);
-	bg_tex = LoadTextureFromImage(bg_img);
-	bg_pos = (Vector3){ -6.0f, -6.0f, -6.0f };
-	bg_size = 16.0f;
-	
 	camera.position = (Vector3){
 		CAMERA_START_POS, 
 		CAMERA_START_POS,
@@ -335,13 +337,20 @@ void round_init(){
 	
 	camera_blend_height = camera.position.y;
 	
-	radius = sqrt(
+	cam_radius = sqrt(
 		pow(camera.position.x - camera.target.x, 2) +
 		pow(camera.position.z - camera.target.z, 2)
 	);
-	angle = (Vector2){ .x  = 45.0f, .y = 45.0f };
+	cam_angle = (Vector2){ .x  = 45.0f, .y = 45.0f };
 	
 	SetCameraMode(camera, CAMERA_CUSTOM); // Set a free camera mode
+	
+	// TODO -- organize magic numbers
+	m = LoadModelFromMesh(GenMeshCylinder(9, 20, 36));
+	m_img = GenImageGradientH(640, 480, BLACK, WHITE);
+	m_tex = LoadTextureFromImage(m_img);
+	m.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = m_tex;
+	m_pos = (Vector3){ 0.0f, -13.0f, 0.0f };
 	
 	colorsize = sizeof(block_colors)/sizeof(block_colors[0]) - 1;
 	
@@ -464,22 +473,22 @@ bool update_play(){
 	
 	// L camera
 	if (IsKeyDown(KEY_LEFT)){
-		angle.x += 1.0f * (GetFrameTime() / 0.01667f);
-		if (angle.x >= 360.0f)
-			angle.x -= 360.0f;
+		cam_angle.x += 1.0f * (GetFrameTime() / 0.01667f);
+		if (cam_angle.x >= 360.0f)
+			cam_angle.x -= 360.0f;
 		
-		camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
-		camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
+		camera.position.x = camera.target.x + cam_radius * cos(cam_angle.x * PI / 180);
+		camera.position.z = camera.target.z + cam_radius * sin(cam_angle.x * PI / 180);
 	}
 	
 	// R camera
 	if (IsKeyDown(KEY_RIGHT)){
-		angle.x -= 1.0f * (GetFrameTime() / 0.01667f);
-		if (angle.x <= 0.0f)
-			angle.x = 360.f - angle.x;
+		cam_angle.x -= 1.0f * (GetFrameTime() / 0.01667f);
+		if (cam_angle.x <= 0.0f)
+			cam_angle.x = 360.f - cam_angle.x;
 		
-		camera.position.x = camera.target.x + radius * cos(angle.x * PI / 180);
-		camera.position.z = camera.target.z + radius * sin(angle.x * PI / 180);
+		camera.position.x = camera.target.x + cam_radius * cos(cam_angle.x * PI / 180);
+		camera.position.z = camera.target.z + cam_radius * sin(cam_angle.x * PI / 180);
 	}
 	
 	if(camera.position.y < camera_blend_height){
@@ -577,25 +586,23 @@ void draw_topblock(){
 }
 
 void render_play(){
+	
 	BeginDrawing();
 
 		ClearBackground(bg);
 		
 		BeginMode3D(camera);
 		
-		DrawBillboard(
-			camera,
-			bg_tex,
-			bg_pos,
-			bg_size,
-			WHITE
-		);
-
 		draw_stack();
 		draw_destroying();
 		draw_topblock();
 		
-		//~ DrawGrid(10, 0.5f);
+		// non-culled cylinder showed faster than billboard
+		// and even flat texture draw to render surface
+		// which seems weird, but k.
+		rlDisableBackfaceCulling();
+			DrawModel(m, m_pos, 1.0f, WHITE);
+		rlEnableBackfaceCulling();
 		
 		EndMode3D();
 		
@@ -636,8 +643,6 @@ void render_over(){
 		draw_destroying();
 		draw_topblock();
 		
-		//~ DrawGrid(10, 0.5f);
-		
 		EndMode3D();
 		
 		// TODO -- clean up
@@ -666,7 +671,6 @@ menu_state_t menu_s = START;
 state_t update_menu(){
 	
 	int keypress = -1;
-	bool stop = false;
 	while((keypress = GetKeyPressed())){
 		if (keypress == KEY_DOWN) {
 			menu_s++;
