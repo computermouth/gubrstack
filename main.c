@@ -31,17 +31,32 @@ typedef enum { LEFT, RIGHT } direction_t;
 
 Color block_colors[] = {
 	GRAY      ,
-	DARKGRAY  ,
+	//~ DARKGRAY  ,
 	RED       ,
-	MAROON    ,
+	//~ MAROON    ,
 	LIME      ,
-	DARKGREEN ,
+	//~ DARKGREEN ,
 	BLUE      ,
-	DARKBLUE  ,
+	//~ DARKBLUE  ,
 	VIOLET    ,
-	DARKPURPLE,
+	//~ DARKPURPLE,
 	BROWN     ,
-	DARKBROWN ,
+	//~ DARKBROWN ,
+};
+
+char * color_names[] = {
+	"GRAY"      ,
+	//~ DARKGRAY  ,
+	"RED"       ,
+	//~ MAROON    ,
+	"LIME"      ,
+	//~ DARKGREEN ,
+	"BLUE"      ,
+	//~ DARKBLUE  ,
+	"VIOLET"    ,
+	//~ DARKPURPLE,
+	"BROWN"     ,
+	//~ DARKBROWN ,
 };
 
 ghost_t * destroying = NULL;
@@ -268,19 +283,10 @@ float direction;
 int  points;
 char point_txt[13];
 
-Color bg;
-
-float bg_radius;
-Vector2 bg_angle;
-Image bg_img;
-Texture2D bg_tex;
-Vector3 bg_pos;
-float bg_size;
-
-Model m;
-Image m_img;
-Texture m_tex;
-Vector3 m_pos;
+Model   cyl;
+Image   cyl_img;
+Texture cyl_tex;
+Vector3 cyl_pos;
 
 void new_stack(){
 	
@@ -319,6 +325,8 @@ void new_stack(){
 	
 }
 
+#define CYL_START_Y -13.0f
+
 void round_init(){
 	
 	camera.position = (Vector3){
@@ -346,13 +354,31 @@ void round_init(){
 	SetCameraMode(camera, CAMERA_CUSTOM); // Set a free camera mode
 	
 	// TODO -- organize magic numbers
-	m = LoadModelFromMesh(GenMeshCylinder(9, 20, 36));
-	m_img = GenImageGradientH(640, 480, BLACK, WHITE);
-	m_tex = LoadTextureFromImage(m_img);
-	m.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = m_tex;
-	m_pos = (Vector3){ 0.0f, -13.0f, 0.0f };
+	cyl = LoadModelFromMesh(GenMeshCylinder(9, 20, 36));
+	cyl_img = GenImageGradientH(640, 480, BLACK, WHITE);
+	cyl_tex = LoadTextureFromImage(cyl_img);
+	cyl.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = cyl_tex;
+	cyl_pos = (Vector3){ 0.0f, CYL_START_Y, 0.0f };
+	
+	/* TODO -- try inverting shape itself instead of culling hack
+	for(int i = 0; i < m.meshes[0].triangleCount; i++){
+		int offset = i * 3;
+		float v0 = m.meshes[0].vertices[offset + 0];
+		float v1 = m.meshes[0].vertices[offset + 1];
+		float v2 = m.meshes[0].vertices[offset + 2];
+		m.meshes[0].vertices[offset + 0] = v2;
+		m.meshes[0].vertices[offset + 1] = v1;
+		m.meshes[0].vertices[offset + 2] = v0;
+	}*/
 	
 	colorsize = sizeof(block_colors)/sizeof(block_colors[0]) - 1;
+	
+	for(int i = 0; i < colorsize + 1; i++){
+		printf("%s --\n", color_names[i]);
+		printf("\tRGB: { %03d, %03d, %03d }\n", block_colors[i].r, block_colors[i].g, block_colors[i].b);
+		Vector3 hsv = ColorToHSV(block_colors[i]);
+		printf("\tHSV: { %03f, %03f, %03f }\n", hsv.x, hsv.y, hsv.z);
+	}
 	
 	origin = GetRandomValue(LEFT, RIGHT);
 	direction = 1.0; // toward bottom
@@ -360,7 +386,6 @@ void round_init(){
 	new_stack();
 	
 	points = 0;
-	bg = (Color){.r = 60, .g = 120, .b = 180};
 	
 	sprintf(point_txt, "Points: %d", points);
 	
@@ -397,9 +422,10 @@ bool update_reset(){
 		camera.target.x   =                    CAMERA_TARGET_POS;
 		camera.target.y   = CAMERA_START_POS + CAMERA_TARGET_POS;
 		camera.target.z   =                    CAMERA_TARGET_POS;
-		bg_pos.x          = -1.0f * CAMERA_START_POS;
-		bg_pos.y          = camera.position.y -  2 * CAMERA_START_POS;
-		bg_pos.z          = -1.0f * CAMERA_START_POS;
+		//~ bg_pos.x          = -1.0f * CAMERA_START_POS;
+		//~ bg_pos.y          = camera.position.y -  2 * CAMERA_START_POS;
+		//~ bg_pos.z          = -1.0f * CAMERA_START_POS;
+		cyl_pos.y         = camera.target.y + CYL_START_Y;
 		new_stack();
 		topblock.c_color.a = 0;
 		topblock.l_color.a = 0;
@@ -413,7 +439,8 @@ bool update_reset(){
 	if (reset_s == SCROLL && camera.position.y > CAMERA_START_POS){
 		camera.position.y -= GetFrameTime() / 0.1667f;
 		camera.target.y   -= GetFrameTime() / 0.1667f;
-		bg_pos.y          -= GetFrameTime() / 0.1667f;
+		//~ bg_pos.y          -= GetFrameTime() / 0.1667f;
+		cyl_pos.y          = camera.target.y + CYL_START_Y;
 		
 		if (points > 0)
 			points *= (camera.position.y - CAMERA_START_POS + .01f) / CAMERA_START_POS;
@@ -422,7 +449,8 @@ bool update_reset(){
 		points = 0;
 		camera.position.y = CAMERA_START_POS;
 		camera.target.y   = CAMERA_TARGET_POS;
-		bg_pos.y  = -1.0f * CAMERA_START_POS;
+		//~ bg_pos.y  = -1.0f * CAMERA_START_POS;
+		cyl_pos.y         = CYL_START_Y;
 		camera_blend_height = camera.position.y;
 		topblock.c_color.a = 255;
 		topblock.l_color.a = 255;
@@ -435,21 +463,14 @@ bool update_reset(){
 void render_reset(){
 	BeginDrawing();
 
-		ClearBackground(bg);
+		ClearBackground(WHITE);
 		
 		BeginMode3D(camera);
-		
-		DrawBillboard(
-			camera,
-			bg_tex,
-			bg_pos,
-			bg_size,
-			WHITE
-		);
 
 		draw_stack();
 		draw_destroying();
 		draw_topblock();
+		draw_skybox();
 		
 		//~ DrawGrid(10, 0.5f);
 		
@@ -494,7 +515,8 @@ bool update_play(){
 	if(camera.position.y < camera_blend_height){
 		camera.position.y += 0.01f * GetFrameTime() / 0.01667f;
 		camera.target.y   += 0.01f * GetFrameTime() / 0.01667f;
-		bg_pos.y          += 0.01f * GetFrameTime() / 0.01667f;
+		//~ bg_pos.y          += 0.01f * GetFrameTime() / 0.01667f;
+		cyl_pos.y          = camera.target.y + CYL_START_Y;
 	}
 	
 	// drop the block, add to stack
@@ -537,19 +559,6 @@ bool update_play(){
 			topblock.position.z = -1.0f * ORIGIN_OFFSET;
 		
 		topblock.c_color = block_colors[GetRandomValue(0, colorsize)];
-		
-		if(points < 125){
-			if(points % 3 == 0){
-				bg.r--;
-				bg.g--;
-				bg.b--;
-			} else if (points % 2 == 0){
-				bg.g--;
-				bg.b--;
-			} else {
-				bg.b--;
-			}
-		}
 	}
 	
 	// move along axis
@@ -585,24 +594,27 @@ void draw_topblock(){
 	DrawCubeWires(topblock.position, topblock.width, topblock.height, topblock.length, topblock.l_color);
 }
 
+void draw_skybox(){	
+	// non-culled cylinder showed faster than billboard
+	// and even flat texture draw to render surface
+	// which seems weird, but k.
+	rlDisableBackfaceCulling();
+		DrawModel(cyl, cyl_pos, 1.0f, WHITE);
+	rlEnableBackfaceCulling();
+}
+
 void render_play(){
 	
 	BeginDrawing();
 
-		ClearBackground(bg);
+		ClearBackground(WHITE);
 		
 		BeginMode3D(camera);
 		
 		draw_stack();
 		draw_destroying();
 		draw_topblock();
-		
-		// non-culled cylinder showed faster than billboard
-		// and even flat texture draw to render surface
-		// which seems weird, but k.
-		rlDisableBackfaceCulling();
-			DrawModel(m, m_pos, 1.0f, WHITE);
-		rlEnableBackfaceCulling();
+		draw_skybox();
 		
 		EndMode3D();
 		
@@ -627,21 +639,14 @@ bool update_over(){
 void render_over(){
 	BeginDrawing();
 
-		ClearBackground(bg);
+		ClearBackground(WHITE);
 		
 		BeginMode3D(camera);
-		
-		DrawBillboard(
-			camera,
-			bg_tex,
-			bg_pos,
-			bg_size,
-			WHITE
-		);
 
 		draw_stack();
 		draw_destroying();
 		draw_topblock();
+		draw_skybox();
 		
 		EndMode3D();
 		
@@ -704,19 +709,12 @@ state_t update_menu(){
 void render_menu(){
 	BeginDrawing();
 
-		ClearBackground(bg);
+		ClearBackground(WHITE);
 		
 		BeginMode3D(camera);
-		
-		DrawBillboard(
-			camera,
-			bg_tex,
-			bg_pos,
-			bg_size,
-			WHITE
-		);
 
 		draw_stack();
+		draw_skybox();
 		//~ draw_destroying();
 		//~ draw_topblock();
 		
