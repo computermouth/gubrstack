@@ -12,6 +12,12 @@
 #define CAMERA_START_POS  6.0f
 #define CAMERA_TARGET_POS 0.0f
 
+#define SATUR 0.99f
+#define VALUE 0.70f
+
+typedef enum { MENU, PLAY, OVER, RESET, QUIT } state_t;
+state_t state = MENU;
+
 typedef struct {
 	Vector3 position;
 	float   width;
@@ -30,33 +36,21 @@ typedef struct {
 typedef enum { LEFT, RIGHT } direction_t;
 
 Color block_colors[] = {
-	GRAY      ,
-	//~ DARKGRAY  ,
-	RED       ,
-	//~ MAROON    ,
-	LIME      ,
-	//~ DARKGREEN ,
-	BLUE      ,
-	//~ DARKBLUE  ,
-	VIOLET    ,
-	//~ DARKPURPLE,
-	BROWN     ,
-	//~ DARKBROWN ,
+	GRAY   ,
+	BROWN  ,
+	LIME   ,
+	BLUE   ,
+	VIOLET ,
+	RED    ,
 };
 
 char * color_names[] = {
-	"GRAY"      ,
-	//~ DARKGRAY  ,
-	"RED"       ,
-	//~ MAROON    ,
-	"LIME"      ,
-	//~ DARKGREEN ,
-	"BLUE"      ,
-	//~ DARKBLUE  ,
-	"VIOLET"    ,
-	//~ DARKPURPLE,
-	"BROWN"     ,
-	//~ DARKBROWN ,
+	"GRAY  " ,
+	"BROWN " ,
+	"LIME  " ,
+	"BLUE  " ,
+	"VIOLET" ,
+	"RED   " ,
 };
 
 ghost_t * destroying = NULL;
@@ -86,6 +80,10 @@ void draw_destroying(){
 	if(des_count == 0)
 		return;
 	
+	float speed = 1.0f;
+	if (state == RESET)
+		speed = 3.2f;
+	
 	for(int i = 0; i < des_count; i++){
 		
 		if(destroying[i].ttl > 3.0f)
@@ -109,7 +107,8 @@ void draw_destroying(){
 		destroying[i].cube.position.x += destroying[i].vec.x * 0.002f * GetFrameTime() / 0.01667f;
 		destroying[i].cube.position.z += destroying[i].vec.y * 0.002f * GetFrameTime() / 0.01667f;
 		
-		destroying[i].ttl += GetFrameTime();
+		
+		destroying[i].ttl += GetFrameTime() * speed;
 		destroying[i].cube.c_color.a = (3.0f - destroying[i].ttl) / .05f;
 		destroying[i].cube.l_color.a = destroying[i].cube.c_color.a * 4;
 	}
@@ -295,7 +294,8 @@ void new_stack(){
 		.width = 2.0f,
 		.height = 0.5f,
 		.length = 2.0f,
-		.c_color = block_colors[GetRandomValue(0, colorsize)],
+		//~ .c_color = block_colors[GetRandomValue(0, colorsize)],
+		.c_color = ColorFromHSV(GetRandomValue(0, 360), SATUR, VALUE),
 		.l_color = LIGHTGRAY,
 	};
 
@@ -422,6 +422,13 @@ bool update_reset(){
 		camera.target.x   =                    CAMERA_TARGET_POS;
 		camera.target.y   = CAMERA_START_POS + CAMERA_TARGET_POS;
 		camera.target.z   =                    CAMERA_TARGET_POS;
+		
+		cam_radius = sqrt(
+			pow(camera.position.x - camera.target.x, 2) +
+			pow(camera.position.z - camera.target.z, 2)
+		);
+		cam_angle = (Vector2){ .x  = 45.0f, .y = 45.0f };
+		
 		//~ bg_pos.x          = -1.0f * CAMERA_START_POS;
 		//~ bg_pos.y          = camera.position.y -  2 * CAMERA_START_POS;
 		//~ bg_pos.z          = -1.0f * CAMERA_START_POS;
@@ -558,7 +565,8 @@ bool update_play(){
 		else
 			topblock.position.z = -1.0f * ORIGIN_OFFSET;
 		
-		topblock.c_color = block_colors[GetRandomValue(0, colorsize)];
+		//~ topblock.c_color = block_colors[GetRandomValue(0, colorsize)];
+		topblock.c_color = ColorFromHSV(GetRandomValue(0, 360), SATUR, VALUE);
 	}
 	
 	// move along axis
@@ -657,9 +665,6 @@ void render_over(){
 
 	EndDrawing();
 }
-
-typedef enum { MENU, PLAY, OVER, RESET, QUIT } state_t;
-state_t state = MENU;
 
 // TODO -- clean up
 int staxy = 100;
